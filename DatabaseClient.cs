@@ -8,13 +8,20 @@ using LiteDB;
 
 namespace Termors.Serivces.HippotronicsLedDaemon
 {
-    internal sealed class DatabaseSingleton
-    {
-        private DatabaseSingleton()
-        {
-        }
 
-        static DatabaseSingleton()
+    public class DatabaseClient : IDisposable
+    {
+        public static readonly string LAMPS_TABLE = "lamps";
+        public static ulong DEFAULT_PURGE_TIMEOUT = 5;     // 5 minutes
+
+        public static ulong PurgeTimeout { get; set; } = DEFAULT_PURGE_TIMEOUT;
+
+        public static readonly string DATABASE_PATH;
+
+        protected LiteDatabase Database { get; set; }
+        public readonly object SyncRoot = new object();
+
+        static DatabaseClient()
         {
             // Database name depends on version of this assembly
             string assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
@@ -22,31 +29,22 @@ namespace Termors.Serivces.HippotronicsLedDaemon
             assemblyVersion = assemblyVersion.Substring(0, lastPoint);
 
             // Open database
-            string dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "hippoled" + assemblyVersion + ".db");
-            Database = new LiteDatabase(dbPath);
-
-            var collection = Database.GetCollection<LampNode>(DatabaseClient.LAMPS_TABLE);
-            collection.EnsureIndex(x => x.Name);
+            DATABASE_PATH = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "hippoled" + assemblyVersion + ".db");
         }
 
-        internal static LiteDatabase Database
+        public DatabaseClient()
         {
-            get;
+            var connectionString = String.Format("Filename={0};Connection=shared", DATABASE_PATH);
+            Database = new LiteDatabase(connectionString);
+
+            var collection = Database.GetCollection<LampNode>(LAMPS_TABLE);
+            collection.EnsureIndex("Name");
         }
 
-        internal static object SyncRoot { get; } = new object();
-    }
-
-    public class DatabaseClient
-    {
-        public static readonly string LAMPS_TABLE = "lamps";
-        public static ulong DEFAULT_PURGE_TIMEOUT = 5;     // 5 minutes
-
-        public static ulong PurgeTimeout { get; set; } = DEFAULT_PURGE_TIMEOUT;
 
         public void AddOrUpdate(LampNode node)
         {
-            lock (DatabaseSingleton.SyncRoot)
+            lock (SyncRoot)
             {
                 var table = GetTable();
 
@@ -76,7 +74,7 @@ namespace Termors.Serivces.HippotronicsLedDaemon
 
         public IEnumerable<LampNode> GetAll()
         {
-            lock (DatabaseSingleton.SyncRoot)
+            lock (SyncRoot)
             {
                 var table = GetTable();
                 var list = new List<LampNode>(table.FindAll());
@@ -87,7 +85,7 @@ namespace Termors.Serivces.HippotronicsLedDaemon
 
         public LampNode GetOne(string id)
         {
-            lock (DatabaseSingleton.SyncRoot)
+            lock (SyncRoot)
             {
                 var table = GetTable();
                 var record = table.FindOne(x => x.Name.ToLower() == id.ToLower());
@@ -98,7 +96,7 @@ namespace Termors.Serivces.HippotronicsLedDaemon
 
         public void PurgeExpired()
         {
-            lock (DatabaseSingleton.SyncRoot)
+            lock (SyncRoot)
             {
                 var table = GetTable();
                 var oldest = DateTime.Now.Subtract(TimeSpan.FromMinutes(PurgeTimeout));
@@ -109,7 +107,7 @@ namespace Termors.Serivces.HippotronicsLedDaemon
 
         public void RemoveByName(string id)
         {
-            lock (DatabaseSingleton.SyncRoot)
+            lock (SyncRoot)
             {
                 GetTable().DeleteMany(x => x.Name.ToLower() == id.ToLower());
             }
@@ -117,8 +115,12 @@ namespace Termors.Serivces.HippotronicsLedDaemon
 
         private ILiteCollection<LampNode> GetTable()
         {
-            return DatabaseSingleton.Database.GetCollection<LampNode>(LAMPS_TABLE);
+            return Database.GetCollection<LampNode>(LAMPS_TABLE);
         }
 
+        public void Dispose()
+        {
+            Database.Dispose();
+        }
     }
 }

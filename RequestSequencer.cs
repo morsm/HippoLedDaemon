@@ -27,7 +27,6 @@ namespace Termors.Serivces.HippotronicsLedDaemon
     {
         protected Queue<LampRequest> _queue = new Queue<LampRequest>();
         protected Mutex _mutex = new Mutex(false);
-        protected DatabaseClient _db = new DatabaseClient();
 
         public static RequestSequencer Sequencer = new RequestSequencer();
 
@@ -102,13 +101,19 @@ namespace Termors.Serivces.HippotronicsLedDaemon
 
         protected LampNode GetLampDb(String id)
         {
-            var record = _db.GetOne(id);
-            return record;
+            using (var db = new DatabaseClient())
+            {
+                var record = db.GetOne(id);
+                return record;
+            }
         }
 
         protected void UpdateLampDb(LampNode record)
         {
-            _db.AddOrUpdate(record);             // Update the record to the database
+            using (var db = new DatabaseClient())
+            {
+                db.AddOrUpdate(record);             // Update the record to the database
+            }
         }
 
     }

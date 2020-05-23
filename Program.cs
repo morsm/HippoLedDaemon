@@ -21,7 +21,6 @@ namespace Termors.Serivces.HippotronicsLedDaemon
 
         private ServiceDirectory _serviceDirectory = new ServiceDirectory(filterfunc: FilterHippoServices);
         private ManualResetEvent _endEvent = new ManualResetEvent(false);
-        private DatabaseClient _client = new DatabaseClient();
 
 
         public static async Task Main(string[] args)
@@ -98,20 +97,27 @@ namespace Termors.Serivces.HippotronicsLedDaemon
             Logger.Log("Updating lamp database");
 
             // Update the status for all the lamps that are still in there
-            var lamps = _client.GetAll();
-            foreach (var lamp in lamps)
+            using (var client = new DatabaseClient())
             {
-                await UpdateSingleLamp(_client, lamp);
+                var lamps = client.GetAll();
+
+                var tasks = new List<Task>();
+                foreach (var lamp in lamps)
+                {
+                    tasks.Add(UpdateSingleLamp(client, lamp));
+                }
+                Task.WaitAll(tasks.ToArray());
+
+                // Remove old records
+                client.PurgeExpired();
+
+                // Log current lamp count
+                int lampCount = 0;
+                var entries = client.GetAll().GetEnumerator();
+                while (entries.MoveNext()) ++lampCount;
+                Logger.Log("Lamp database updated, {0} entries", lampCount);
             }
 
-            // Remove old records
-            _client.PurgeExpired();
-
-            // Log current lamp count
-            int lampCount = 0;
-            var entries = _client.GetAll().GetEnumerator();
-            while (entries.MoveNext()) ++lampCount;
-            Logger.Log("Lamp database updated, {0} entries", lampCount);
 
             if (!quit)
             {
@@ -127,7 +133,7 @@ namespace Termors.Serivces.HippotronicsLedDaemon
             {
                 await lampClient.GetState();
 
-                _client.AddOrUpdate(lampClient.Node);
+                db.AddOrUpdate(lampClient.Node);
             }
             catch
             {
@@ -137,7 +143,8 @@ namespace Termors.Serivces.HippotronicsLedDaemon
 
         private void HostRemoved(ServiceDirectory directory, ServiceEntry entry)
         {
-            _client.RemoveByName(ServiceEntryToName(entry));
+            using (var client = new DatabaseClient())
+                client.RemoveByName(ServiceEntryToName(entry));
             Logger.Log("Host removed: {0}", entry.ToShortString());
         }
 
@@ -207,7 +214,11 @@ namespace Termors.Serivces.HippotronicsLedDaemon
         protected void UpdateDb(LampClient lamp)
         {
             // Add new client to database
-            if (lamp.StateSet) _client.AddOrUpdate(lamp.Node);
+            if (lamp.StateSet)
+            {
+                using (var client = new DatabaseClient())
+                    client.AddOrUpdate(lamp.Node);
+            }
         }
 
         protected async Task GetLampStatus(LampClient lamp)
