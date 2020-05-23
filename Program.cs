@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
@@ -51,7 +52,10 @@ namespace Termors.Serivces.HippotronicsLedDaemon
 
             _serviceDirectory.Init();
 
-            Logger.Log("HippotronicsLedDaemon running");
+            string assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            int lastPoint = assemblyVersion.LastIndexOf('.');
+            assemblyVersion = assemblyVersion.Substring(0, lastPoint);
+            Logger.Log("HippotronicsLedDaemon version {0} running", assemblyVersion);
 
             // Schedule purge of records that have not been updated
             await ScheduleNextUpdate();

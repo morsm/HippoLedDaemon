@@ -48,27 +48,44 @@ namespace Termors.Serivces.HippotronicsLedDaemon
             {
                 var table = GetTable();
 
-                // Name exists?
-                var currentLamp = table.FindOne(rec => rec.Name.ToLower() == node.Name.ToLower());
-                if (currentLamp != null)
+                // Try to insert record. If that fails with a duplicate key, then try update
+                // Old code checked for existence first and then decided, but this was
+                // race condition sensitive.
+                try
                 {
-                    // Update
-                    currentLamp.Url = node.Url;
-                    currentLamp.On = node.On;
-                    currentLamp.Online = node.Online;
-                    currentLamp.LastSeen = node.LastSeen;
-                    currentLamp.Red = node.Red;
-                    currentLamp.Green = node.Green;
-                    currentLamp.Blue = node.Blue;
-                    currentLamp.NodeType = node.NodeType;
+                    InsertRecord(table, node);
+                }
+                catch (LiteException lE)
+                {
+                    if (lE.ErrorCode == LiteException.INDEX_DUPLICATE_KEY)
+                        UpdateRecord(table, node);
+                    else
+                        throw lE;       // Some other error
+                }
+            }
+        }
 
-                    table.Update(currentLamp);
-                }
-                else
-                {
-                    // Add
-                    table.Insert(node);
-                }
+        private void InsertRecord(ILiteCollection<LampNode> table, LampNode node)
+        {
+            table.Insert(node);
+        }
+
+        private void UpdateRecord(ILiteCollection<LampNode> table, LampNode node)
+        {
+            var currentLamp = table.FindOne(rec => rec.Name.ToLower() == node.Name.ToLower());
+            if (currentLamp != null)
+            {
+                // Update
+                currentLamp.Url = node.Url;
+                currentLamp.On = node.On;
+                currentLamp.Online = node.Online;
+                currentLamp.LastSeen = node.LastSeen;
+                currentLamp.Red = node.Red;
+                currentLamp.Green = node.Green;
+                currentLamp.Blue = node.Blue;
+                currentLamp.NodeType = node.NodeType;
+
+                table.Update(currentLamp);
             }
         }
 
