@@ -29,6 +29,8 @@ namespace Termors.Serivces.HippotronicsLedDaemon
         [Route("webapi/lamps"), HttpGet]
         public LampNode[] GetLamps()
         {
+            RuntimeMonitor.Monitor.RegisterCall("LampsGetAll");
+
             using (var db = new DatabaseClient())
             {
                 var records = db.GetAll();
@@ -42,6 +44,8 @@ namespace Termors.Serivces.HippotronicsLedDaemon
         [Route("webapi/lamp/{id}"), HttpGet]
         public LampNode GetLamp(string id)
         {
+            RuntimeMonitor.Monitor.RegisterCall("LampGet");
+
             using (var db = new DatabaseClient())
             {
                 var record = db.GetOne(id);
@@ -59,6 +63,8 @@ namespace Termors.Serivces.HippotronicsLedDaemon
         public LampNode SetLampStateExtended(string id, SetLampDataExtended data)
         {
             LampNode record = null;
+
+            RuntimeMonitor.Monitor.RegisterCall("LampSet");
 
             record = GetLamp(id);
             record.ProcessStateChanges(data);

@@ -1,0 +1,6 @@
+﻿{
+  "Port": "9000",
+  "KeepaliveIntervalMinutes": 3,
+  "KeepaliveGrace": 3,
+  "LocalNetwork":  "192.168.1.0/24"
+}
